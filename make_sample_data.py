@@ -7,6 +7,7 @@ Real FAERS ASCII data: https://www.fda.gov/drugs/questions-and-answers-fdas-adve
 Files are pipe-delimited ($ in older quarters), named e.g. DEMO24Q1.txt,
 DRUG24Q1.txt, REAC24Q1.txt. Column names match what's used below.
 """
+import os
 import pandas as pd
 import numpy as np
 import random
@@ -71,6 +72,7 @@ demo = pd.DataFrame(demo_rows)
 drug = pd.DataFrame(drug_rows)
 reac = pd.DataFrame(reac_rows)
 
+os.makedirs("sample_data", exist_ok=True)
 demo.to_csv("sample_data/DEMO_sample.csv", index=False)
 drug.to_csv("sample_data/DRUG_sample.csv", index=False)
 reac.to_csv("sample_data/REAC_sample.csv", index=False)
