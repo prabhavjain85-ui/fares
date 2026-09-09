@@ -12,9 +12,6 @@ import pandas as pd
 import numpy as np
 import random
 
-random.seed(42)
-np.random.seed(42)
-
 N_CASES = 4000
 
 drugs = [
@@ -39,43 +36,55 @@ boosted_pairs = {
     ("PREDNISONE", "HEPATIC FAILURE"): 0.15,
 }
 
-demo_rows, drug_rows, reac_rows = [], [], []
 
-for case_id in range(1, N_CASES + 1):
-    primaryid = 100000 + case_id
-    age = np.random.randint(18, 90)
-    sex = random.choice(["M", "F"])
-    event_dt = f"2024{random.randint(1,4):02d}{random.randint(1,28):02d}"
-    demo_rows.append({
-        "primaryid": primaryid, "caseid": case_id, "age": age,
-        "sex": sex, "event_dt": event_dt,
-        "occr_country": "US",
-    })
+def generate_sample_dataframes(n_cases: int = N_CASES, seed: int = 42):
+    """Return (demo, drug, reac) DataFrames with deterministic synthetic FAERS data."""
+    random.seed(seed)
+    np.random.seed(seed)
 
-    case_drugs = random.sample(drugs, k=random.randint(1, 2))
-    for d in case_drugs:
-        drug_rows.append({"primaryid": primaryid, "caseid": case_id, "drugname": d, "role_cod": "PS"})
+    demo_rows, drug_rows, reac_rows = [], [], []
 
-    n_reac = random.randint(1, 3)
-    case_reactions = set(random.sample(reactions, k=n_reac))
+    for case_id in range(1, n_cases + 1):
+        primaryid = 100000 + case_id
+        age = np.random.randint(18, 90)
+        sex = random.choice(["M", "F"])
+        event_dt = f"2024{random.randint(1,4):02d}{random.randint(1,28):02d}"
+        demo_rows.append({
+            "primaryid": primaryid, "caseid": case_id, "age": age,
+            "sex": sex, "event_dt": event_dt,
+            "occr_country": "US",
+        })
 
-    # inject boosted signal reactions probabilistically
-    for d in case_drugs:
-        for (bd, br), p in boosted_pairs.items():
-            if d == bd and random.random() < p:
-                case_reactions.add(br)
+        case_drugs = random.sample(drugs, k=random.randint(1, 2))
+        for d in case_drugs:
+            drug_rows.append({
+                "primaryid": primaryid, "caseid": case_id,
+                "drugname": d, "role_cod": "PS",
+            })
 
-    for r in case_reactions:
-        reac_rows.append({"primaryid": primaryid, "caseid": case_id, "pt": r})
+        n_reac = random.randint(1, 3)
+        case_reactions = set(random.sample(reactions, k=n_reac))
 
-demo = pd.DataFrame(demo_rows)
-drug = pd.DataFrame(drug_rows)
-reac = pd.DataFrame(reac_rows)
+        for d in case_drugs:
+            for (bd, br), p in boosted_pairs.items():
+                if d == bd and random.random() < p:
+                    case_reactions.add(br)
 
-os.makedirs("sample_data", exist_ok=True)
-demo.to_csv("sample_data/DEMO_sample.csv", index=False)
-drug.to_csv("sample_data/DRUG_sample.csv", index=False)
-reac.to_csv("sample_data/REAC_sample.csv", index=False)
+        for r in case_reactions:
+            reac_rows.append({"primaryid": primaryid, "caseid": case_id, "pt": r})
 
-print(f"DEMO: {len(demo)} rows | DRUG: {len(drug)} rows | REAC: {len(reac)} rows")
-print("Written to sample_data/")
+    return pd.DataFrame(demo_rows), pd.DataFrame(drug_rows), pd.DataFrame(reac_rows)
+
+
+def main():
+    demo, drug, reac = generate_sample_dataframes()
+    os.makedirs("sample_data", exist_ok=True)
+    demo.to_csv("sample_data/DEMO_sample.csv", index=False)
+    drug.to_csv("sample_data/DRUG_sample.csv", index=False)
+    reac.to_csv("sample_data/REAC_sample.csv", index=False)
+    print(f"DEMO: {len(demo)} rows | DRUG: {len(drug)} rows | REAC: {len(reac)} rows")
+    print("Written to sample_data/")
+
+
+if __name__ == "__main__":
+    main()
