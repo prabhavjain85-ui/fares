@@ -2,7 +2,7 @@
 
 A disproportionality-analysis pipeline for detecting adverse drug reaction
 (ADR) signals, built on the FDA FAERS data schema (DEMO / DRUG / REAC tables
-joined on `primaryid`).
+joined on `primaryid`). Includes a **FastAPI** web UI that runs on **Vercel**.
 
 ## Files
 
@@ -12,15 +12,19 @@ joined on `primaryid`).
 - `make_sample_data.py` — generates a small synthetic dataset (in FAERS
   schema) with a few known signals baked in, so you can test the pipeline
   immediately without downloading real data.
-- `sample_data/` — output of the above (DEMO/DRUG/REAC CSVs).
+- `sample_data/` — committed DEMO/DRUG/REAC CSVs for offline CLI use
+  (regenerate anytime with `python make_sample_data.py`).
 - `signals.csv` — example output from running the pipeline on the sample data.
+- `main.py` — FastAPI app (`app`) with a browser UI and JSON API for
+  running signal detection on the synthetic sample data.
+- `vercel.json` — Vercel function config (`maxDuration` for the Python entrypoint).
 
-## Quick start
+## Quick start (CLI)
 
 ```bash
-pip install pandas numpy scipy
+pip install -r requirements.txt
 
-# 1. generate test data (or skip this and point at real FAERS files, see below)
+# 1. generate test data (optional — sample_data/ CSVs are already committed)
 python make_sample_data.py
 
 # 2. run signal detection
@@ -33,6 +37,28 @@ python faers_signal_detection.py \
 ```
 
 Optional: filter to a single drug with `--drug-filter WARFARIN`.
+
+## Local web UI
+
+```bash
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+Open http://127.0.0.1:8000 — click **Run analysis** (or wait for auto-run) to
+see the signal table. JSON API: `GET /api/signals?min_cases=3&signals_only=true`.
+
+## Deploy on Vercel
+
+1. Push this repo to GitHub (already done if you are reading this on GitHub).
+2. In [Vercel](https://vercel.com): **Add New Project** → import this GitHub repo.
+3. Framework preset: **FastAPI** / **Python** (auto-detected from `main.py`).
+4. Root Directory: `.` (project root).
+5. Deploy. Vercel installs `requirements.txt` and serves the `app` instance in `main.py`.
+
+Optional: `vercel.json` already sets `maxDuration: 60` for the analysis endpoint.
+The web app generates sample frames in-memory (same logic as `make_sample_data.py`)
+so the serverless function does not need the CSV bundle at runtime.
 
 ## Using real FAERS data
 
