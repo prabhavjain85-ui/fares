@@ -2,32 +2,42 @@
 
 A disproportionality-analysis pipeline for detecting adverse drug reaction
 (ADR) signals, built on the FDA FAERS data schema (DEMO / DRUG / REAC tables
-joined on `primaryid`). Includes a **FastAPI** web UI that runs on **Vercel**.
+joined on `primaryid`). Includes a polished **FastAPI** multi-step web workflow
+that runs on **Vercel**, with **sample FAERS CSVs committed in the repo**.
 
 ## Files
 
 - `faers_signal_detection.py` — main pipeline: loads FAERS-style tables,
   normalizes drug names and MedDRA terms, and computes **PRR**, **ROR**,
   chi-square, and 95% confidence intervals for every drug–event pair.
-- `make_sample_data.py` — generates a small synthetic dataset (in FAERS
-  schema) with a few known signals baked in, so you can test the pipeline
-  immediately without downloading real data.
-- `sample_data/` — committed DEMO/DRUG/REAC CSVs for offline CLI use
-  (regenerate anytime with `python make_sample_data.py`).
+- `make_sample_data.py` — generates synthetic DEMO/DRUG/REAC data for
+  10 drugs with known signals baked in.
+- `sample_data/` — **included in the repo**: `DEMO_sample.csv`,
+  `DRUG_sample.csv`, `REAC_sample.csv` (~4,000 cases). Regenerate anytime
+  with `python make_sample_data.py`.
 - `signals.csv` — example output from running the pipeline on the sample data.
-- `main.py` — FastAPI app (`app`) with a browser UI and JSON API for
-  running signal detection on the synthetic sample data.
+- `main.py` — FastAPI app (`app`) with a browser workflow and JSON API.
 - `vercel.json` — Vercel function config (`maxDuration` for the Python entrypoint).
+
+## Web workflow
+
+Open the UI and walk a product-style flow:
+
+1. **Dataset** — confirms sample FAERS DEMO / DRUG / REAC is loaded (row counts).
+2. **Choose drug** — grid of all sample drugs (IBUPROFEN, ATORVASTATIN,
+   METFORMIN, LISINOPRIL, OMEPRAZOLE, WARFARIN, SIMVASTATIN, AMOXICILLIN,
+   CLOPIDOGREL, PREDNISONE) plus an **All drugs** overview.
+3. **Results** — polished ADR table with PRR / ROR / χ² / cases / signal badges,
+   sorted by PRR, with filters (signals only, min cases). Auto-loads on open.
 
 ## Quick start (CLI)
 
 ```bash
 pip install -r requirements.txt
 
-# 1. generate test data (optional — sample_data/ CSVs are already committed)
+# sample_data/ CSVs are already committed; regenerate if you like:
 python make_sample_data.py
 
-# 2. run signal detection
 python faers_signal_detection.py \
     --demo sample_data/DEMO_sample.csv \
     --drug sample_data/DRUG_sample.csv \
@@ -45,20 +55,31 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-Open http://127.0.0.1:8000 — click **Run analysis** (or wait for auto-run) to
-see the signal table. JSON API: `GET /api/signals?min_cases=3&signals_only=true`.
+Open http://127.0.0.1:8000 — the workflow auto-loads the dataset and drug picker.
+
+### API
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Liveness |
+| `GET /api/dataset` | Row counts + source (`sample_data` or generated) |
+| `GET /api/drugs` | All drugs with report / ADR / signal counts |
+| `GET /api/drugs/{name}/adrs` | Per-drug ADR rows (`min_cases`, `signals_only`) |
+| `GET /api/signals` | Overview of pairs (`min_cases`, `signals_only`, optional `drug`) |
+
+The app prefers committed `sample_data/*.csv` and falls back to in-memory
+`generate_sample_dataframes()` if the CSVs are missing.
 
 ## Deploy on Vercel
 
-1. Push this repo to GitHub (already done if you are reading this on GitHub).
+1. Push this repo to GitHub.
 2. In [Vercel](https://vercel.com): **Add New Project** → import this GitHub repo.
 3. Framework preset: **FastAPI** / **Python** (auto-detected from `main.py`).
 4. Root Directory: `.` (project root).
 5. Deploy. Vercel installs `requirements.txt` and serves the `app` instance in `main.py`.
 
-Optional: `vercel.json` already sets `maxDuration: 60` for the analysis endpoint.
-The web app generates sample frames in-memory (same logic as `make_sample_data.py`)
-so the serverless function does not need the CSV bundle at runtime.
+`vercel.json` sets `maxDuration: 60`. Committed sample CSVs ship with the
+function; if absent at runtime, the app generates equivalent frames in memory.
 
 ## Using real FAERS data
 
@@ -67,11 +88,8 @@ https://www.fda.gov/drugs/questions-and-answers-fdas-adverse-event-reporting-sys
 
 Each quarter's zip contains `DEMOyyQq.txt`, `DRUGyyQq.txt`, `REACyyQq.txt`
 (pipe- or `$`-delimited, matching this pipeline's expected columns:
-`primaryid`, `drugname`, `role_cod`, `pt`). Just point the `--demo/--drug/--reac`
-flags at those files directly — no schema changes needed. Note: a single
-quarter is ~1-2 GB uncompressed; for multi-quarter analysis you'll want to
-concatenate files first and consider loading into DuckDB/Postgres rather than
-pandas for memory reasons.
+`primaryid`, `drugname`, `role_cod`, `pt`). Point `--demo/--drug/--reac`
+at those files directly. A single quarter is ~1–2 GB uncompressed.
 
 ## How the statistics work
 
@@ -82,30 +100,15 @@ For each drug–event pair, a 2×2 contingency table is built:
 | Drug of interest   | a                  | b                 |
 | All other drugs    | c                  | d                 |
 
-- **PRR** = (a/(a+b)) / (c/(c+d)) — how much more often this event is
-  reported for this drug vs. all other drugs.
-- **ROR** = (a×d) / (b×c) — odds-ratio equivalent, generally preferred
-  statistically (more robust CI behavior).
-- **Chi-square** (Yates-corrected) tests whether the association is
-  statistically significant.
-- A **signal** is flagged using the standard FDA/MHRA convention:
-  PRR ≥ 2, chi-square ≥ 4, and case count ≥ 3 (the last is configurable via
-  `--min-cases`).
+- **PRR** = (a/(a+b)) / (c/(c+d))
+- **ROR** = (a×d) / (b×c)
+- **Chi-square** (Yates-corrected) for significance
+- A **signal** uses the FDA/MHRA convention: PRR ≥ 2, chi-square ≥ 4,
+  and case count ≥ 3 (`--min-cases` / UI filter)
 
-## Known limitations / next steps
+## Known limitations
 
-- **Reporting bias**: FAERS is spontaneous-report data — it reflects what
-  gets reported, not true incidence. Signals need clinical review, not
-  automatic trust.
-- **Drug name normalization** here is basic (uppercase + salt-suffix
-  stripping). For production use, map names through **RxNorm** to properly
-  consolidate brand names, combination products, and generics.
-- **MedDRA hierarchy** isn't used — this treats each Preferred Term
-  independently. Grouping into MedDRA System Organ Classes / High-Level
-  Terms would catch related-but-differently-worded reactions.
-- **Confounding by indication** isn't controlled for (e.g., a drug given to
-  sicker patients will show inflated signals for unrelated events). Stratified
-  or multivariate methods (e.g., logistic regression, BCPNN) handle this
-  better than simple PRR/ROR.
-- No temporal analysis — trending signal strength over report quarters would
-  help catch emerging safety issues.
+- FAERS is spontaneous-report data — signals need clinical review.
+- Drug-name normalization is basic; production use should map through RxNorm.
+- MedDRA hierarchy / SOCs are not grouped.
+- Confounding by indication is not controlled for.
