@@ -5,30 +5,39 @@ A disproportionality-analysis pipeline for detecting adverse drug reaction
 joined on `primaryid`). Includes a polished **FastAPI** multi-step web workflow
 that runs on **Vercel**, with **sample FAERS CSVs committed in the repo**.
 
+## Platform upgrades (v3)
+
+1. **Real FAERS ingest** — upload DEMO / DRUG / REAC (CSV/TXT; comma / `$` / `|`)
+   via the UI or `POST /api/ingest`. Uploads live in **process memory** only;
+   use **Reset to sample** (`POST /api/reset`) to restore committed sample data.
+2. **RxNorm-style drug mapping** — brand aliases (COUMADIN→WARFARIN, LIPITOR→
+   ATORVASTATIN, …) collapse in `normalize_drug_name` via `drug_mapping.py`.
+3. **Drug compare + charts** — select 2–3 drugs, `GET /api/compare`, side-by-side
+   shared-ADR table, plus pure SVG bar charts (no npm).
+
 ## Files
 
 - `faers_signal_detection.py` — main pipeline: loads FAERS-style tables,
-  normalizes drug names and MedDRA terms, and computes **PRR**, **ROR**,
-  chi-square, and 95% confidence intervals for every drug–event pair.
-- `make_sample_data.py` — generates synthetic DEMO/DRUG/REAC data for
-  10 drugs with known signals baked in.
+  normalizes drug names (salts + brand→generic) and MedDRA terms, computes
+  **PRR**, **ROR**, chi-square, and 95% CIs.
+- `drug_mapping.py` — alias → canonical generic map used by normalization.
+- `make_sample_data.py` — generates synthetic DEMO/DRUG/REAC data; intentionally
+  emits some brand-name strings so mapping is demonstrable.
 - `sample_data/` — **included in the repo**: `DEMO_sample.csv`,
-  `DRUG_sample.csv`, `REAC_sample.csv` (~200 cases). Regenerate anytime
-  with `python make_sample_data.py`.
-- `signals.csv` — example output from running the pipeline on the sample data.
-- `main.py` — FastAPI app (`app`) with inline multi-step dark UI + JSON API.
+  `DRUG_sample.csv`, `REAC_sample.csv` (~200 cases).
+- `main.py` — FastAPI app with workflow UI + JSON API (ingest / reset / compare).
+- `workflow.html` — multi-step dark UI (upload, single-drug, compare, SVG charts).
 - `vercel.json` — Vercel function config (`maxDuration` for the Python entrypoint).
 
 ## Web workflow
 
-Open the UI and walk a product-style flow:
-
-1. **Dataset** — confirms sample FAERS DEMO / DRUG / REAC is loaded (row counts).
-2. **Choose drug** — grid of all sample drugs (IBUPROFEN, ATORVASTATIN,
-   METFORMIN, LISINOPRIL, OMEPRAZOLE, WARFARIN, SIMVASTATIN, AMOXICILLIN,
-   CLOPIDOGREL, PREDNISONE) plus an **All drugs** overview.
-3. **Results** — polished ADR table with PRR / ROR / χ² / cases / signal badges,
-   sorted by PRR, with filters (signals only, min cases). Auto-loads on open.
+1. **Dataset** — sample FAERS tables load by default. Optionally upload DEMO /
+   DRUG / REAC extracts (≤ ~5 MB each) or reset to sample.
+2. **Choose drug** — single-drug cards (canonical generics) or **Compare 2–3**
+   mode; plus an **All drugs** overview.
+3. **Results** — ADR table with PRR / ROR / χ² / cases / signal badges, filters,
+   horizontal SVG bar chart of top PRR signals, and (in compare mode) shared-ADR
+   bars across selected drugs.
 
 ## Quick start (CLI)
 
@@ -46,7 +55,8 @@ python faers_signal_detection.py \
     --out signals.csv
 ```
 
-Optional: filter to a single drug with `--drug-filter WARFARIN`.
+Optional: filter to a single drug with `--drug-filter WARFARIN` (also matches
+COUMADIN rows after canonicalization).
 
 ## Local web UI
 
@@ -62,13 +72,27 @@ Open http://127.0.0.1:8000 — the workflow auto-loads the dataset and drug pick
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/health` | Liveness |
-| `GET /api/dataset` | Row counts + source (`sample_data` or generated) |
+| `GET /api/dataset` | Row counts + `source` (`sample_data` \| `generated` \| `upload`) |
+| `POST /api/ingest` | Multipart upload: fields `demo`, `drug`, `reac` (≤5 MB each) |
+| `POST /api/reset` | Clear upload cache; restore sample/default |
+| `GET /api/drug-map` | Brand/alias → canonical summary |
 | `GET /api/drugs` | All drugs with report / ADR / signal counts |
 | `GET /api/drugs/{name}/adrs` | Per-drug ADR rows (`min_cases`, `signals_only`) |
 | `GET /api/signals` | Overview of pairs (`min_cases`, `signals_only`, optional `drug`) |
+| `GET /api/compare` | `?drugs=WARFARIN,CLOPIDOGREL&min_cases=3&signals_only=false` — per-drug rows + shared-event matrix |
 
-The app prefers committed `sample_data/*.csv` and falls back to in-memory
-`generate_sample_dataframes()` if the CSVs are missing.
+Required columns on ingest: DEMO `primaryid`; DRUG `primaryid`, `drugname`;
+REAC `primaryid`, `pt`. `role_cod` is optional (when present, only PS/SS kept).
+
+### Upload limits & Vercel memory
+
+- Each uploaded file is capped at **~5 MB** (`413` if larger; `400` on parse /
+  missing columns).
+- Uploaded frames are stored in **module-level process memory** and LRU signal
+  caches are cleared after ingest/reset.
+- On **Vercel**, serverless memory is **ephemeral**: uploads do **not** persist
+  across cold starts, scale-out to another instance, or redeploys. Prefer small
+  extracts for demos; for large quarterly FAERS files use the CLI locally.
 
 ## Deploy on Vercel
 
@@ -89,7 +113,7 @@ https://www.fda.gov/drugs/questions-and-answers-fdas-adverse-event-reporting-sys
 Each quarter's zip contains `DEMOyyQq.txt`, `DRUGyyQq.txt`, `REACyyQq.txt`
 (pipe- or `$`-delimited, matching this pipeline's expected columns:
 `primaryid`, `drugname`, `role_cod`, `pt`). Point `--demo/--drug/--reac`
-at those files directly. A single quarter is ~1–2 GB uncompressed.
+at those files directly, or upload a small extract via the web UI.
 
 ## How the statistics work
 
@@ -109,6 +133,7 @@ For each drug–event pair, a 2×2 contingency table is built:
 ## Known limitations
 
 - FAERS is spontaneous-report data — signals need clinical review.
-- Drug-name normalization is basic; production use should map through RxNorm.
+- Drug-name mapping is a demo alias table, not a full RxNorm service.
 - MedDRA hierarchy / SOCs are not grouped.
 - Confounding by indication is not controlled for.
+- Uploaded datasets on Vercel are ephemeral (see above).
