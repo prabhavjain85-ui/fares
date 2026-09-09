@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>FAERS ADR Workflow</title>
+<style>
+:root{--bg:#0b1220;--panel:#121a2b;--panel2:#182338;--border:#2a3a55;--text:#e8eef8;--muted:#93a4bd;--accent:#3b82f6;--accent2:#60a5fa;--signal:#22c55e;--nosignal:#64748b;--danger:#f87171;--ok:#34d399}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:radial-gradient(900px 480px at 10% -10%,#1e3a5f,transparent 55%),var(--bg);color:var(--text);min-height:100vh;line-height:1.45}
+.wrap{max-width:1100px;margin:0 auto;padding:1.5rem 1rem 2.5rem}h1{margin:0 0 .3rem;font-size:1.7rem;letter-spacing:-.02em}
+header p{margin:0;color:var(--muted)}.badges{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.7rem}
+.badge{padding:.2rem .55rem;border:1px solid var(--border);border-radius:999px;font-size:.72rem;color:var(--muted)}.badge.ok{color:var(--ok);border-color:rgba(52,211,153,.35)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin:1.2rem 0}.step{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:.7rem .85rem;display:flex;gap:.6rem;opacity:.5}
+.step.active{opacity:1;border-color:rgba(59,130,246,.55)}.step.done{opacity:.85}.num{width:1.55rem;height:1.55rem;border-radius:999px;display:grid;place-items:center;background:rgba(59,130,246,.15);color:var(--accent2);font-weight:700;font-size:.8rem}
+.step.active .num{background:var(--accent);color:#fff}.step h3{margin:0;font-size:.9rem}.step p{margin:.1rem 0 0;font-size:.72rem;color:var(--muted)}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem;margin-top:.9rem}.panel h2{margin:0 0 .25rem;font-size:1.05rem}
+.sub{color:var(--muted);font-size:.85rem;margin:0 0 .8rem}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.55rem}
+.stat{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:.7rem}.stat .l{font-size:.68rem;text-transform:uppercase;color:var(--muted)}.stat .v{font-size:1.2rem;font-weight:700;margin-top:.15rem}
+.files{margin-top:.75rem;display:grid;gap:.35rem}.file{padding:.45rem .65rem;border:1px solid var(--border);border-radius:8px;font-size:.82rem;background:rgba(255,255,255,.02)}.file code{color:var(--accent2)}
+.actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.9rem}button{padding:.5rem .95rem;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:.88rem}
+button.sec{background:transparent;border:1px solid var(--border);color:var(--text)}button:hover{filter:brightness(1.08)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.6rem}
+.card,.ov{text-align:left;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:.8rem;color:var(--text);cursor:pointer;width:100%}
+.card:hover,.ov:hover{border-color:rgba(59,130,246,.55)}.card.sel,.ov.sel{border-color:var(--accent)}.card .n{font-weight:700}.m{margin-top:.35rem;color:var(--muted);font-size:.75rem}
+.chips{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem}.chip{font-size:.68rem;padding:.1rem .4rem;border-radius:999px;border:1px solid var(--border);color:var(--muted)}.chip.sig{color:var(--signal);border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.1)}
+.ctrls{display:flex;flex-wrap:wrap;gap:.75rem;align-items:flex-end;margin-bottom:.7rem}label{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;color:var(--muted)}
+input[type=number]{width:5rem;padding:.4rem .5rem;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--text)}.chk{flex-direction:row;align-items:center;gap:.4rem;padding-bottom:.35rem}
+.meta{color:var(--muted);font-size:.82rem;margin:.3rem 0 .6rem}.err{color:var(--danger);margin-top:.5rem}
+.tw{overflow-x:auto;border:1px solid var(--border);border-radius:8px}table{width:100%;border-collapse:collapse;font-size:.82rem}
+th,td{padding:.45rem .6rem;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}th{color:var(--muted);font-size:.7rem;text-transform:uppercase;background:rgba(0,0,0,.2)}
+.pill{display:inline-block;padding:.12rem .45rem;border-radius:999px;font-size:.7rem;font-weight:700}.pill.y{background:rgba(34,197,94,.15);color:var(--signal)}.pill.n{background:rgba(100,116,139,.2);color:var(--nosignal)}
+.empty{padding:1.5rem;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:8px}.loading{display:flex;align-items:center;gap:.5rem;color:var(--muted);padding:1rem .2rem}
+.spin{width:.9rem;height:.9rem;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+footer{margin-top:1.1rem;color:var(--muted);font-size:.75rem}code{background:rgba(255,255,255,.06);padding:.08rem .3rem;border-radius:4px}a{color:#93c5fd}.hid{display:none!important}
+.row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.6rem;align-items:center}
+@media(max-width:800px){.steps{grid-template-columns:1fr}}
+</style></head><body><div class="wrap">
+<header><h1>FAERS ADR Workflow</h1>
+<p>Per-drug ADR profiles with PRR, ROR, χ², and signal flags. Demo data only.</p>
+<div class="badges"><span class="badge ok" id="sourceBadge">Loading…</span><span class="badge">10 drugs · DEMO / DRUG / REAC</span><span class="badge">PRR ≥ 2 · χ² ≥ 4 · min cases</span></div>
+</header>
+<div class="steps" id="stepper">
+<div class="step active" data-step="1"><div class="num">1</div><div><h3>Dataset</h3><p>Load sample FAERS tables</p></div></div>
+<div class="step" data-step="2"><div class="num">2</div><div><h3>Choose drug</h3><p>Pick a drug or overview</p></div></div>
+<div class="step" data-step="3"><div class="num">3</div><div><h3>Results</h3><p>ADR table + filters</p></div></div>
+</div>
+<section class="panel" id="panelDataset"><h2>Step 1 · Dataset ready</h2>
+<p class="sub">Committed sample FAERS DEMO / DRUG / REAC power the workflow and CLI.</p>
+<div class="loading" id="datasetLoading"><div class="spin"></div> Loading dataset…</div>
+<div id="datasetBody" class="hid"><div class="stats" id="datasetStats"></div><div class="files" id="datasetFiles"></div>
+<div class="actions"><button type="button" id="toDrugsBtn">Continue to drug picker →</button></div></div>
+<div class="err" id="datasetErr" hidden></div></section>
+<section class="panel hid" id="panelDrugs"><div class="row"><div><h2>Step 2 · Choose a drug</h2><p class="sub" style="margin:0">All sample drugs plus an all-drugs overview.</p></div>
+<button type="button" class="sec" id="backToDataset">← Dataset</button></div>
+<div class="loading" id="drugsLoading"><div class="spin"></div> Loading drugs…</div>
+<div id="drugsBody" class="hid"><button type="button" class="ov" id="overviewCard" style="margin-bottom:.7rem"><div style="font-weight:700">All drugs · flagged signals overview</div><div class="m">Cross-drug flagged pairs, sorted by PRR</div></button>
+<div class="grid" id="drugGrid"></div></div>
+<div class="err" id="drugsErr" hidden></div></section>
+<section class="panel hid" id="panelResults"><div class="row"><div><h2 id="resultsTitle">Step 3 · Results</h2>
+<p class="sub" id="resultsSub" style="margin:0">PRR / ROR / χ² for the selected scope.</p></div>
+<button type="button" class="sec" id="backToDrugs">← Change drug</button></div>
+<div class="ctrls"><label>Min cases<input id="minCases" type="number" min="1" max="50" value="3"/></label>
+<label class="chk"><input id="signalsOnly" type="checkbox"/> Signals only</label>
+<button type="button" id="refreshBtn">Refresh</button></div>
+<div class="meta" id="meta">Preparing…</div><div class="err" id="err" hidden></div>
+<div class="loading hid" id="resultsLoading"><div class="spin"></div> Computing…</div>
+<div id="resultsEmpty" class="empty hid">No pairs matched the current filters.</div>
+<div class="tw" id="tableWrap"><table><thead><tr><th>Drug</th><th>Adverse event</th><th>PRR</th><th>ROR</th><th>Chi²</th><th>Cases</th><th>Signal</th></tr></thead>
+<tbody id="tbody"><tr><td colspan="7" style="color:var(--muted)">Loading…</td></tr></tbody></table></div></section>
+<footer>Rule: PRR ≥ 2, χ² ≥ 4, cases ≥ min. API: <a href="/api/dataset"><code>/api/dataset</code></a> · <a href="/api/drugs"><code>/api/drugs</code></a> · <a href="/api/signals"><code>/api/signals</code></a></footer>
+</div>
+<script>
+const state={step:1,selectedDrug:null,drugs:[],dataset:null};
+const $=id=>document.getElementById(id);
+function setStep(n){state.step=n;document.querySelectorAll('.step').forEach(el=>{const s=+el.dataset.step;el.classList.toggle('active',s===n);el.classList.toggle('done',s<n)});
+$('panelDataset').classList.toggle('hid',n!==1);$('panelDrugs').classList.toggle('hid',n!==2);$('panelResults').classList.toggle('hid',n!==3)}
+function fmt(n){return typeof n!=='number'?n:(Number.isInteger(n)?String(n):n.toFixed(3))}
+function fmtInt(n){return Number(n).toLocaleString()}
+async function loadDataset(){$('datasetErr').hidden=true;try{const res=await fetch('/api/dataset');if(!res.ok)throw new Error('HTTP '+res.status);const data=await res.json();state.dataset=data;
+const src=data.source==='sample_data'?'sample_data CSVs loaded':'in-memory generated sample';$('sourceBadge').textContent=src;$('sourceBadge').classList.add('ok');
+$('datasetStats').innerHTML=[['Cases',data.case_count],['DEMO rows',data.demo_rows],['DRUG rows',data.drug_rows],['REAC rows',data.reac_rows],['Drug–event pairs',data.pair_count],['Drugs',data.drug_count||10]].map(([l,v])=>`<div class="stat"><div class="l">${l}</div><div class="v">${fmtInt(v)}</div></div>`).join('');
+$('datasetFiles').innerHTML=Object.entries(data.files||{}).map(([k,p])=>`<div class="file"><span><strong>${k}</strong> · <code>${p}</code></span><span>${src}</span></div>`).join('');
+$('datasetLoading').classList.add('hid');$('datasetBody').classList.remove('hid')}catch(e){$('datasetLoading').classList.add('hid');$('datasetErr').hidden=false;$('datasetErr').textContent='Failed to load dataset: '+e.message}}
+async function loadDrugs(){$('drugsErr').hidden=true;$('drugsLoading').classList.remove('hid');$('drugsBody').classList.add('hid');
+try{const res=await fetch('/api/drugs');if(!res.ok)throw new Error('HTTP '+res.status);const data=await res.json();state.drugs=data.drugs||[];
+$('drugGrid').innerHTML=state.drugs.map(d=>`<button type="button" class="card" data-drug="${d.drug}"><div class="n">${d.drug}</div><div class="m">${fmtInt(d.report_count)} reports</div><div class="chips"><span class="chip">${d.adr_count} ADR rows</span><span class="chip ${d.signal_count?'sig':''}">${d.signal_count} signal${d.signal_count===1?'':'s'}</span></div></button>`).join('');
+$('drugGrid').querySelectorAll('.card').forEach(c=>c.addEventListener('click',()=>selectDrug(c.dataset.drug)));
+$('drugsLoading').classList.add('hid');$('drugsBody').classList.remove('hid')}catch(e){$('drugsLoading').classList.add('hid');$('drugsErr').hidden=false;$('drugsErr').textContent='Failed to load drugs: '+e.message}}
+function selectDrug(name){state.selectedDrug=name;document.querySelectorAll('.card,.ov').forEach(el=>el.classList.toggle('sel',el.dataset.drug===name||(name===null&&el.id==='overviewCard')));setStep(3);
+if(name){$('resultsTitle').textContent='Step 3 · '+name+' ADR profile';$('resultsSub').textContent='All ADRs for this drug with PRR / ROR / χ² / cases / signal.';$('signalsOnly').checked=false}
+else{$('resultsTitle').textContent='Step 3 · All drugs overview';$('resultsSub').textContent='Flagged drug–ADR pairs across the sample.';$('signalsOnly').checked=true}
+runResults()}
+async function runResults(){$('err').hidden=true;$('resultsLoading').classList.remove('hid');$('tableWrap').classList.add('hid');$('resultsEmpty').classList.add('hid');$('meta').textContent='Computing…';
+const minCases=$('minCases').value||3,signalsOnly=$('signalsOnly').checked;
+try{let rows=[],label='';if(state.selectedDrug){const qs=new URLSearchParams({min_cases:String(minCases),signals_only:String(signalsOnly)});const res=await fetch('/api/drugs/'+encodeURIComponent(state.selectedDrug)+'/adrs?'+qs);if(!res.ok)throw new Error('HTTP '+res.status);const data=await res.json();rows=data.results||[];label=`${state.selectedDrug} · ${rows.length} ADR row(s)`}
+else{const qs=new URLSearchParams({min_cases:String(minCases),signals_only:String(signalsOnly)});const res=await fetch('/api/signals?'+qs);if(!res.ok)throw new Error('HTTP '+res.status);const data=await res.json();rows=data.results||[];label=`All drugs · ${rows.length} pair(s)`}
+$('meta').textContent=`${label} · min_cases=${minCases} · signals_only=${signalsOnly} · sorted by PRR`;$('resultsLoading').classList.add('hid');
+if(!rows.length){$('resultsEmpty').classList.remove('hid');return}$('tableWrap').classList.remove('hid');
+$('tbody').innerHTML=rows.map(r=>`<tr><td>${r.drug}</td><td>${r.adverse_event}</td><td>${fmt(r.PRR)}</td><td>${fmt(r.ROR)}</td><td>${fmt(r.chi_square)}</td><td>${r.case_count_a}</td><td><span class="pill ${r.signal_detected?'y':'n'}">${r.signal_detected?'Signal':'No'}</span></td></tr>`).join('')}
+catch(e){$('resultsLoading').classList.add('hid');$('err').hidden=false;$('err').textContent='Failed to load results: '+e.message;$('meta').textContent='Error'}}
+$('toDrugsBtn').addEventListener('click',async()=>{setStep(2);if(!state.drugs.length)await loadDrugs()});
+$('backToDataset').addEventListener('click',()=>setStep(1));$('backToDrugs').addEventListener('click',()=>setStep(2));
+$('overviewCard').addEventListener('click',()=>{state.selectedDrug=null;document.querySelectorAll('.card').forEach(el=>el.classList.remove('sel'));$('overviewCard').classList.add('sel');selectDrug(null)});
+$('refreshBtn').addEventListener('click',runResults);
+(async()=>{await loadDataset();setStep(2);await loadDrugs()})();
+</script></body></html>
