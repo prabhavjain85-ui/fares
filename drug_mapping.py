@@ -1,15 +1,16 @@
 """
-RxNorm-style brand/generic alias map for demo FAERS drug names.
+RxNorm-style brand/generic normalization for FAERS drug names.
 
-Maps common brand names (and a few spelling variants) to canonical generic
-names used for signal aggregation. Salt/formulation stripping remains in
-normalize_drug_name; this module supplies the alias → canonical step.
+The mapping is deliberately data-driven: add aliases to
+DRUG_ALIAS_TO_CANONICAL or suffixes to DRUG_SUFFIXES without changing the
+signal-computation pipeline.  This is a lightweight demo mapping, not a full
+RxNorm terminology service.
 """
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Final
 
-# Brand / alias → canonical generic (all uppercase, post salt-strip keys)
+# Brand / alias -> canonical generic. Keys and values are uppercase.
 DRUG_ALIAS_TO_CANONICAL: Dict[str, str] = {
     # Anticoagulants / antiplatelets
     "COUMADIN": "WARFARIN",
@@ -24,7 +25,7 @@ DRUG_ALIAS_TO_CANONICAL: Dict[str, str] = {
     "LOSEC": "OMEPRAZOLE",
     "AMOXIL": "AMOXICILLIN",
     "NORVASC": "AMLODIPINE",
-    # Identity entries so the map is self-describing for generics already in sample
+    # Identity entries make canonical generics discoverable via the API.
     "WARFARIN": "WARFARIN",
     "CLOPIDOGREL": "CLOPIDOGREL",
     "ATORVASTATIN": "ATORVASTATIN",
@@ -38,24 +39,70 @@ DRUG_ALIAS_TO_CANONICAL: Dict[str, str] = {
     "PREDNISONE": "PREDNISONE",
 }
 
+# Repeatedly removed from the end, longest first. This handles values such as
+# "METFORMIN HYDROCHLORIDE TABLETS" as well as the common abbreviated salts.
+DRUG_SUFFIXES: Final[tuple[str, ...]] = tuple(sorted({
+    "EXTENDED RELEASE",
+    "HYDROCHLORIDE",
+    "HYDROBROMIDE",
+    "MONOHYDRATE",
+    "POTASSIUM",
+    "PHOSPHATE",
+    "SUCCINATE",
+    "TARTRATE",
+    "MESYLATE",
+    "BESYLATE",
+    "MALEATE",
+    "ACETATE",
+    "CALCIUM",
+    "SODIUM",
+    "SULFATE",
+    "CAPSULES",
+    "CAPSULE",
+    "TABLETS",
+    "TABLET",
+    "HCL",
+}, key=len, reverse=True))
+
+
+def strip_drug_suffixes(name: str) -> str:
+    """Uppercase a drug string and remove known trailing salts/formulations."""
+    cleaned = " ".join(str(name).strip().upper().split())
+    changed = True
+    while cleaned and changed:
+        changed = False
+        for suffix in DRUG_SUFFIXES:
+            marker = f" {suffix}"
+            if cleaned.endswith(marker):
+                cleaned = cleaned[:-len(marker)].strip()
+                changed = True
+                break
+    return cleaned
+
 
 def canonicalize_drug(name: str) -> str:
-    """Map a cleaned (uppercase, salt-stripped) drug string to its canonical form."""
+    """Normalize salts/formulations, then map an alias to its canonical generic."""
     if name is None:
         return name
-    key = str(name).strip().upper()
+    key = strip_drug_suffixes(name)
     return DRUG_ALIAS_TO_CANONICAL.get(key, key)
 
 
 def drug_map_summary() -> dict:
-    """Return alias groups for API/UI display (canonical → [aliases])."""
-    groups: Dict[str, list] = {}
-    for alias, canon in sorted(DRUG_ALIAS_TO_CANONICAL.items()):
-        groups.setdefault(canon, [])
-        if alias != canon and alias not in groups[canon]:
-            groups[canon].append(alias)
+    """Return alias groups and supported suffix stripping for API/UI display."""
+    groups: Dict[str, list[str]] = {}
+    for alias, canonical in sorted(DRUG_ALIAS_TO_CANONICAL.items()):
+        groups.setdefault(canonical, [])
+        if alias != canonical and alias not in groups[canonical]:
+            groups[canonical].append(alias)
+    aliases = {
+        canonical: sorted(values)
+        for canonical, values in sorted(groups.items())
+        if values
+    }
     return {
-        "alias_count": sum(len(v) for v in groups.values()),
+        "alias_count": sum(len(values) for values in aliases.values()),
         "canonical_count": len(groups),
-        "map": {k: sorted(v) for k, v in sorted(groups.items()) if v},
+        "map": aliases,
+        "stripped_suffixes": list(DRUG_SUFFIXES),
     }
