@@ -16,8 +16,7 @@ that runs on **Vercel**, with **sample FAERS CSVs committed in the repo**.
   `DRUG_sample.csv`, `REAC_sample.csv` (~200 cases). Regenerate anytime
   with `python make_sample_data.py`.
 - `signals.csv` — example output from running the pipeline on the sample data.
-- `main.py` — FastAPI app (`app`) with a browser workflow and JSON API.
-- `workflow.html` — multi-step dark UI loaded by `main.py`.
+- `main.py` — FastAPI app (`app`) with inline multi-step dark UI + JSON API.
 - `vercel.json` — Vercel function config (`maxDuration` for the Python entrypoint).
 
 ## Web workflow
