@@ -1,0 +1,14 @@
+main.py
+requirements.txt
+Procfile
+*.py
+sample_data/
+__pycache__/
+faers_signal_detection.py
+drug_mapping.py
+make_sample_data.py
+signals.csv
+.git/
+.venv/
+venv/
+*.pyc
