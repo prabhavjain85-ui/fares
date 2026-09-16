@@ -1,11 +1,13 @@
 """
-Vercel-deployable FastAPI UI for FAERS drug-ADR signal detection.
+FastAPI backend for FAERS drug-ADR signal detection.
 
 Committed sample data is the default. Small real FAERS extracts can be uploaded
 and are retained only in this Python process until reset or process shutdown.
+The static workflow UI is served from Vercel (public/); this app exposes the API.
 """
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -14,7 +16,8 @@ from typing import Any
 from urllib.parse import unquote
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from drug_mapping import drug_map_summary
 from faers_signal_detection import (
@@ -32,6 +35,34 @@ app = FastAPI(
 )
 
 ROOT = Path(__file__).resolve().parent
+PUBLIC_DIR = ROOT / "public"
+CONFIG_JS = PUBLIC_DIR / "config.js"
+
+_DEFAULT_LOCAL_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+]
+
+
+def _cors_origins() -> list[str]:
+    """Allow FRONTEND_ORIGIN (comma-separated); otherwise local dev origins only."""
+    raw = os.environ.get("FRONTEND_ORIGIN", "").strip()
+    if raw:
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return list(_DEFAULT_LOCAL_ORIGINS)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 SAMPLE_DIR = ROOT / "sample_data"
 DEMO_CSV = SAMPLE_DIR / "DEMO_sample.csv"
 DRUG_CSV = SAMPLE_DIR / "DRUG_sample.csv"
@@ -197,6 +228,14 @@ INDEX_HTML = (
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return INDEX_HTML
+
+
+@app.get("/config.js")
+def config_js() -> FileResponse:
+    """Serve frontend API base URL config for local uvicorn (Vercel serves public/ directly)."""
+    if not CONFIG_JS.is_file():
+        raise HTTPException(status_code=404, detail="config.js not found")
+    return FileResponse(CONFIG_JS, media_type="application/javascript")
 
 
 @app.get("/api/health")
